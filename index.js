@@ -4,11 +4,14 @@ var debug = require('debug')('chalk:generator');
 var Chalk = require('./Chalk');
 var Step = require('step');
 var data = require('./data/default');
+var jsonfile = require('jsonfile');
 
 var teachers = {}, tcnt = 0;
 
 debug("Connecting to Database...");
 mongoose.connect('mongodb://localhost/test');
+
+var organizations;
 
 Step(
   function() {
@@ -29,7 +32,7 @@ Step(
       _(type.courseId).forEach((courseId, idx) => {
         var __id, __teacherId;
         if(org.teacher in teachers) {
-          __teacherId = teachers[org.teacher].id;
+          __teacherId = teachers[org.teacher];
         } else {
           __teacherId = teachers[org.teacher] = ++tcnt;
         }
@@ -39,7 +42,8 @@ Step(
           name: type.pre + data.post[idx] + __id,
           courseId: courseId,
           class: org.class,
-          teacherId: __teacherId
+          teacherId: __teacherId,
+          times: (idx === 0 ? 3 : 2)
         });
         organization.save(group());
       });
@@ -47,6 +51,7 @@ Step(
   },
   function(err, orgs) {
     if(err) return console.error(err);
+    organizations = orgs;
     debug("Writing Teacher Data...");
     var group = this.group();
     _(teachers).forEach((teacherId, name) => {
@@ -57,7 +62,20 @@ Step(
       teacher.save(group());
     });
   },
-  function(err, results) {
+  function(err) {
+    if(err) return console.error(err);
+    debug("Writing to file...");
+    jsonfile.writeFile(__dirname + '/data/orgs.json', _.map(organizations, (org) => {
+      return {
+        name: org.name,
+        class: org.class,
+        teacherId: org.teacherId,
+        courseId: org.courseId,
+        times: org.times
+      };
+    }), this);
+  },
+  function(err) {
     if(err) return console.error(err);
     debug("Complete");
     process.exit(0);
